@@ -5,14 +5,18 @@
 #include <NeoPixelBus.h>
 #include <Ticker.h>
 #include <SPI.h>
-#include <TFT_eSPI.h>    
-// #include "../include/user_setup.h"
+#include <TFT_eSPI.h>
+#include <Wire.h>    
+#include "../include/User_Setup.h"
 
 
-#define ENCODERA  4
+#define ENCODERA  16
 #define ENCODERB  5
 #define BUILTIN_LED1 1
 #define NEO_PIN 1
+
+#define I2C_CLK 4
+#define I2C_DATA 2
 
 #define colorSaturation 64
 
@@ -24,10 +28,11 @@ int cwStates[4] = {10, 0, 11, 1};
 int ccwStates[4] = {1, 11, 0, 10};
 int state;
 int priorState = 0;
-
+const int MPU6050_addr=0x68;
 float p = 3.1415926;
-
+int16_t AccX,AccY,AccZ,Temp,GyroX,GyroY,GyroZ;
 Ticker timerInt;
+Ticker displayUpdate;
 
 RgbColor red(colorSaturation, 0, 0);
 RgbColor green(0, colorSaturation, 0);
@@ -50,21 +55,51 @@ void testdrawtext(char *text, uint16_t color) {
   tft.setTextWrap(true);
   tft.print(text);
 }
+void printAcc() {
+    tft.fillScreen(TFT_BLACK);
+    tft.setTextColor(TFT_WHITE);
+    tft.setTextSize(1);
+    tft.setTextWrap(false);
+    tft.setCursor(0, 10);
+    tft.println("AccX = ");
+    tft.print(AccX);
+    tft.setCursor(0, 40);
+    tft.println("AccY = ");
+    tft.print(AccY);
+    tft.setCursor(0, 70);
+    tft.println("AccZ = ");
+    tft.print(AccZ);
+  };
+  
+  
 void setup() {
   // Serial.begin(115200);
   // Serial.println();
-  
+  Wire.begin(I2C_DATA, I2C_CLK);
+  Wire.beginTransmission(MPU6050_addr);
+
+  Wire.write(0x6B);
+
+  Wire.write(0);
+
+  Wire.endTransmission(true);
+
   pinMode(BUILTIN_LED1, OUTPUT); // Initialize the BUILTIN_LED1 pin as an output
+  // Convert RXD mand TXD to GPIO
+  // pinMode(ENCODERA, FUNCTION_3);
+  // pinMode(NEO_PIN, FUNCTION_0);
+
   pinMode(ENCODERA, INPUT);
   pinMode(ENCODERB, INPUT);
   pinMode(NEO_PIN, OUTPUT);
-  pinMode(TFT_CS, OUTPUT);
+  pinMode(I2C_CLK, OUTPUT);
+  pinMode(I2C_DATA, OUTPUT);
+  // pinMode(TFT_CS, OUTPUT);
   pinMode(TFT_DC, OUTPUT);
   // int i = 0;
   tft.begin();
   tft.setRotation(2);
   
-  pinMode(NEO_PIN, OUTPUT);
   
   WiFi.mode(WIFI_STA);
   WiFi.begin("coopersac", "mollysophie916");
@@ -86,7 +121,8 @@ void setup() {
   // Serial.println();
   strip.SetPixelColor(0, green);
   strip.Show();
-  
+  timerInt.attach_ms(1, setState);
+  displayUpdate.attach(0.5, printAcc);
   
   // Port defaults to 8266
   // ArduinoOTA.setPort(8266);
@@ -118,7 +154,6 @@ void setup() {
   tft.drawString("abcdefghijklmnopqrstuvw", 0, 48, 2);
 
   
-  timerInt.attach_ms(1, setState);
 
   // Use this initializer if you're using a 1.8" TFT
   // tft.init();   // initialize a ST7735S chip
@@ -126,6 +161,7 @@ void setup() {
   tft.fillScreen(TFT_BLACK);
   testdrawtext("Lorem ipsum dolor sit amet, consectetur adipiscing elit. Curabitur adipiscing ante sed nibh tincidunt feugiat. Maecenas enim massa, fringilla sed malesuada et, malesuada sit amet turpis. Sed porttitor neque ut ante pretium vitae malesuada nunc bibendum. Nullam aliquet ultrices massa eu hendrerit. Ut sed nisi lorem. In vestibulum purus a tortor imperdiet posuere. ", 0xffff);
   delay(1000);
+  tft.fillScreen(TFT_BLACK);
 
 }
   // TFT 7735 rountines
@@ -321,7 +357,28 @@ void setup() {
 
 void loop() {
   delay(1);
- 
+  Wire.beginTransmission(MPU6050_addr);
+
+  Wire.write(0x3B);
+
+  Wire.endTransmission(false);
+
+  Wire.requestFrom(MPU6050_addr,14,true);
+
+  AccX=Wire.read()<<8|Wire.read();
+
+  AccY=Wire.read()<<8|Wire.read();
+
+  AccZ=Wire.read()<<8|Wire.read();
+
+  Temp=Wire.read()<<8|Wire.read();
+
+  GyroX=Wire.read()<<8|Wire.read();
+
+  GyroY=Wire.read()<<8|Wire.read();
+
+  GyroZ=Wire.read()<<8|Wire.read();
+
   // ArduinoOTA.handle();
   // encoder phases are normally
   //  when triggered they go low momentarily - the rc determines recovery time
